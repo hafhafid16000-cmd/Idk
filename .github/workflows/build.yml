@@ -1,0 +1,48 @@
+name: Build Tactical Armory
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Restore uploaded source
+        run: |
+          cat source/archive.part* > TacticalArmory-src-lot3.zip
+          echo 'd34e35838abe7514c46ffed7914976f5269b8b259fc21fc32494527cbb47d636  TacticalArmory-src-lot3.zip' | sha256sum -c -
+          unzip -q TacticalArmory-src-lot3.zip
+      - name: Apply build fixes
+        run: |
+          if [ -d patches ]; then cp -a patches/. TacticalArmory/; fi
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Compile and package mod
+        working-directory: TacticalArmory
+        run: bash gradlew build --no-daemon --stacktrace --console=plain
+      - name: Verify compiled JAR
+        working-directory: TacticalArmory
+        run: |
+          test -s build/libs/TacticalArmory-1.21.1-NeoForge.jar
+          jar tf build/libs/TacticalArmory-1.21.1-NeoForge.jar | grep -q 'com/tacticalarmory/TacticalArmory.class'
+          jar tf build/libs/TacticalArmory-1.21.1-NeoForge.jar | grep -q 'META-INF/neoforge.mods.toml'
+          sha256sum build/libs/TacticalArmory-1.21.1-NeoForge.jar > build/libs/SHA256SUMS.txt
+      - name: Upload mod JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: TacticalArmory-1.21.1-NeoForge
+          path: |
+            TacticalArmory/build/libs/TacticalArmory-1.21.1-NeoForge.jar
+            TacticalArmory/build/libs/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 30
