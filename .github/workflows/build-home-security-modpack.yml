@@ -1,0 +1,30 @@
+name: Build Optimized Home Security Modpack
+on:
+  workflow_dispatch:
+  push:
+    branches: [modpack/optimized-home-security]
+    paths:
+      - 'modpack/pack_builder.py'
+      - '.github/workflows/build-home-security-modpack.yml'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build the Minecraft 1.21.1 NeoForge modpack
+        run: python modpack/pack_builder.py --output output
+      - name: Upload complete modpack
+        uses: actions/upload-artifact@v4
+        with:
+          name: OptimizedHomeSecurity-1.21.1-NeoForge
+          path: |
+            output/*.mrpack
+            output/*-mods.zip
+            output/installed-manifest.json
+          if-no-files-found: error
