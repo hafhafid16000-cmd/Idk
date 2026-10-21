@@ -1,0 +1,54 @@
+name: PyStudio Android APK
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - pystudio/android-ide
+    paths:
+      - 'pystudio/**'
+      - '.github/workflows/pystudio-mobile.yml'
+permissions:
+  contents: read
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Expand PyStudio source
+        run: base64 -d pystudio/pystudio-source.tar.xz.b64 | tar -xJf -
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - uses: android-actions/setup-android@v3
+      - name: Install SDK platform
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "platform-tools"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - name: Python tests
+        working-directory: PyStudio-Mobile
+        run: python -m unittest discover -s tests -v
+      - name: Gradle wrapper
+        working-directory: PyStudio-Mobile
+        run: gradle wrapper --gradle-version 8.13
+      - name: Compile APK
+        working-directory: PyStudio-Mobile
+        run: ./gradlew :app:assembleDebug --stacktrace --no-daemon
+      - name: Inspect APK
+        working-directory: PyStudio-Mobile
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk PyStudio-Mobile.apk
+          unzip -t PyStudio-Mobile.apk | tail -n 1
+          sha256sum PyStudio-Mobile.apk > PyStudio-Mobile.apk.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PyStudio-Mobile
+          path: |
+            PyStudio-Mobile/PyStudio-Mobile.apk
+            PyStudio-Mobile/PyStudio-Mobile.apk.sha256
+          retention-days: 30
