@@ -1,0 +1,40 @@
+name: Cave Horror FCL Android fix validation
+on:
+  push:
+    branches:
+      - cave-horror-fcl-android-fix
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Syntax validation
+        run: python -m py_compile cave-horror-fcl-fix/tools/fix_pack.py
+      - name: Synthetic CurseForge pack test
+        shell: bash
+        run: |
+          python - <<'PY'
+          import importlib.util, json, tempfile, zipfile
+          from pathlib import Path
+          spec=importlib.util.spec_from_file_location("fix_pack","cave-horror-fcl-fix/tools/fix_pack.py")
+          m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+          with tempfile.TemporaryDirectory() as d:
+              p=Path(d);src=p/"source.zip";dst=p/"fixed.zip"
+              with zipfile.ZipFile(src,"w") as z:
+                  z.writestr("manifest.json",json.dumps({"name":"Test","version":"1","files":[{"projectID":i,"fileID":1,"required":True} for i in sorted(m.EXCLUDE)]+[{"projectID":1234,"fileID":1,"required":True}]}))
+                  z.writestr("overrides/config/embeddium-options.json","{}")
+                  z.writestr("overrides/config/good.properties","hello")
+              m.fix_archive(src,dst)
+              with zipfile.ZipFile(dst) as z:
+                  assert z.testzip() is None
+                  files=json.loads(z.read("manifest.json"))["files"]
+                  assert len(files)==1 and files[0]["projectID"]==1234
+                  assert "overrides/config/embeddium-options.json" not in z.namelist()
+                  assert z.read("overrides/config/good.properties")==b"hello"
+              print("OK")
+          PY
