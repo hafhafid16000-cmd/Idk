@@ -1,0 +1,34 @@
+name: Validate dependency-safe Cave Horror pack repair
+on:
+  push:
+    branches: [cave-horror-fcl-android-fix]
+  workflow_dispatch:
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate script syntax and behavior
+        run: |
+          python -m py_compile cave-horror-fcl-fix/tools/fix_dependencies.py
+          python - <<'PY'
+          from pathlib import Path
+          import json, tempfile, zipfile, importlib.util
+          spec=importlib.util.spec_from_file_location("fix_deps","cave-horror-fcl-fix/tools/fix_dependencies.py")
+          m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+          with tempfile.TemporaryDirectory() as tmp:
+              src=Path(tmp)/"original.zip";dst=Path(tmp)/"fixed.zip"
+              data={"manifestType":"minecraftModpack","name":"Cave Horror","version":"1","files":[{"projectID":p,"fileID":1,"required":True} for p in (908741,581495,915902,12345)]}
+              with zipfile.ZipFile(src,"w") as zip:
+                  zip.writestr("manifest.json",json.dumps(data))
+                  zip.writestr("overrides/config/do-not-touch.txt","safe")
+              m.fix_pack(src,dst)
+              with zipfile.ZipFile(dst) as zip:
+                  actual=json.loads(zip.read("manifest.json"))["files"]
+                  assert {(x["projectID"],x["fileID"]) for x in actual} == {(908741,1),(581495,1),(915902,1),(12345,1),(654373,6101745)}
+                  assert zip.read("overrides/config/do-not-touch.txt") == b"safe"
+              print("Dependency-safe test passed")
+          PY
